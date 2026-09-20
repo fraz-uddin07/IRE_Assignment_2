@@ -1,0 +1,10 @@
+polars>=1.0
+pyarrow
+lightgbm
+scikit-learn
+numpy
+scipy
+tqdm
+rank-bm25
+sentence-transformers
+faiss-cpu
