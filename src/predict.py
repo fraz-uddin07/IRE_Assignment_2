@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
+from tqdm import tqdm
 
 from src.config import (
     MIND_PROCESSED, MIND_LARGE_TEST_DIR,
@@ -132,7 +133,8 @@ def generate_mind_predictions(
     predictions_written = 0
 
     with open(output_path, "w") as f:
-        for row in test_beh.iter_rows(named=True):
+        for row in tqdm(test_beh.iter_rows(named=True), total=len(test_beh),
+                        desc="  MIND predictions", unit="imp"):
             imp_id = row["impression_id"]
             candidates = row.get("candidates", [])
             if candidates is None:
@@ -162,9 +164,6 @@ def generate_mind_predictions(
 
             f.write(f"{imp_id} [{','.join(map(str, ranks))}]\n")
             predictions_written += 1
-
-            if predictions_written % 50000 == 0:
-                print(f"    {predictions_written:,} written...")
 
     print(f"  Done! {predictions_written:,} predictions → {output_path}")
     return output_path
@@ -219,10 +218,13 @@ def generate_ebnerd_predictions(
 
     pf = pq.ParquetFile(test_beh_path)
     n_row_groups = pf.metadata.num_row_groups
-    print(f"  Processing {n_row_groups} row groups...")
+    total_rows = pf.metadata.num_rows
+    print(f"  Processing {total_rows:,} impressions across {n_row_groups} row groups...")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     predictions_written = 0
+
+    pbar = tqdm(total=total_rows, desc="  EB-NeRD predictions", unit="imp")
 
     with open(output_path, "w") as f:
         for rg_idx in range(n_row_groups):
@@ -258,13 +260,12 @@ def generate_ebnerd_predictions(
 
                 f.write(f"{imp_id} [{','.join(map(str, ranks))}]\n")
                 predictions_written += 1
+                pbar.update(1)
 
             del batch
             gc.collect()
 
-            if (rg_idx + 1) % 10 == 0:
-                print(f"    Row group {rg_idx+1}/{n_row_groups}, "
-                      f"{predictions_written:,} written")
+    pbar.close()
 
     print(f"  Done! {predictions_written:,} predictions → {output_path}")
     return output_path
@@ -319,7 +320,24 @@ def main():
         else:
             print(f"\n⚠️  Skipped zip creation: {out} was not generated.")
     else:
-        test_dir = Path(args.test_dir) if args.test_dir else EBNERD_TEST_DIR
+        if args.test_dir:
+            test_dir = Path(args.test_dir)
+        elif EBNERD_TEST_DIR.exists():
+            test_dir = EBNERD_TEST_DIR
+        else:
+            # Fallback: use the best available dataset's validation split
+            from src.config import EBNERD_LARGE_DIR, EBNERD_SMALL_DIR, EBNERD_DEMO_DIR
+            fallback = None
+            for fb_dir in [EBNERD_LARGE_DIR, EBNERD_SMALL_DIR, EBNERD_DEMO_DIR]:
+                if fb_dir.exists():
+                    fallback = fb_dir
+                    break
+            if fallback is None:
+                print("  ❌ No EB-NeRD data found at all. Run data_loader first.")
+                return
+            print(f"  ⚠️  ebnerd_testset not found, using validation split from {fallback.name}")
+            test_dir = fallback
+
         out = OUTPUTS_DIR / f"ebnerd_prediction_{args.method}.txt"
         res = generate_ebnerd_predictions(test_dir, out, model=model, method=args.method)
         if res and out.exists():

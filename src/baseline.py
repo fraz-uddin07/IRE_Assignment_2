@@ -178,6 +178,16 @@ def run_ablation(
     3. LightGBM WITHOUT category features (ablated).
     4. Paired bootstrap CI on (improved - ablated) and (improved - baseline).
     """
+    if max_train_impressions is None:
+        max_train_impressions = 25000
+    elif max_train_impressions == -1:
+        max_train_impressions = None
+
+    if max_val_impressions is None:
+        max_val_impressions = 25000
+    elif max_val_impressions == -1:
+        max_val_impressions = None
+
     id_col = "news_id" if dataset == "mind" else "article_id"
     proc = MIND_PROCESSED if dataset == "mind" else EBNERD_PROCESSED
     dev_key = "dev_behaviors.parquet" if dataset == "mind" else "val_behaviors.parquet"

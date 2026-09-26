@@ -321,11 +321,11 @@ def parse_mind_behaviors(data_dir: Path, is_test: bool = False) -> pl.DataFrame:
 
 def _find_ebnerd_base(data_dir: Path) -> Path:
     """Find the actual EB-NeRD base directory (may be nested)."""
-    if (data_dir / "train").exists() or (data_dir / "validation").exists():
+    if (data_dir / "train").exists() or (data_dir / "validation").exists() or (data_dir / "test").exists():
         return data_dir
     # Check one level deeper
     for child in data_dir.iterdir():
-        if child.is_dir() and ((child / "train").exists() or (child / "validation").exists()):
+        if child.is_dir() and ((child / "train").exists() or (child / "validation").exists() or (child / "test").exists()):
             return child
     return data_dir
 
